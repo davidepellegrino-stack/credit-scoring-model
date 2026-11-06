@@ -1,5 +1,7 @@
 # Credit Scoring Model
 
+![Credit scoring PD model: ROC curve, best AUC 0.69 for logistic regression](assets/cover.jpg)
+
 A full machine learning pipeline for credit default prediction, built with scikit-learn. Trains and compares three models — Logistic Regression, Random Forest, and Gradient Boosting — with cross-validation, ROC-AUC evaluation, feature importance analysis, and publication-quality visualizations.
 
 Built as part of a self-directed quantitative finance project alongside M2 Financial Economics studies at Université Paris 1 Panthéon-Sorbonne.
@@ -90,3 +92,9 @@ credit-scoring-model/
 
 - Python 3.9+
 - scikit-learn, pandas, numpy, scipy, matplotlib, seaborn
+
+## Author
+
+Davide Pellegrino · M2 Financial Economics, Université Paris 1 Panthéon-Sorbonne · [LinkedIn](https://www.linkedin.com/in/pellegrino-davide/)
+
+Other projects: [Sanctions and privacy coins (M1 thesis)](https://github.com/davidepellegrino-stack/sanctions-privacy-coins) · [Portfolio risk analyzer](https://github.com/davidepellegrino-stack/portfolio-risk-analyzer)
