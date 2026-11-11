@@ -1,5 +1,7 @@
 # Credit Scoring Model
 
+[![tests](https://github.com/davidepellegrino-stack/credit-scoring-model/actions/workflows/tests.yml/badge.svg)](https://github.com/davidepellegrino-stack/credit-scoring-model/actions/workflows/tests.yml)
+
 ![Credit scoring PD model: ROC curve, best AUC 0.69 for logistic regression](assets/cover.jpg)
 
 A full machine learning pipeline for credit default prediction, built with scikit-learn. Trains and compares three models — Logistic Regression, Random Forest, and Gradient Boosting — with cross-validation, ROC-AUC evaluation, feature importance analysis, and publication-quality visualizations.
@@ -62,6 +64,15 @@ pip install -r requirements.txt
 python src/main.py
 ```
 
+### Tests
+
+```bash
+pip install pytest
+pytest -q
+```
+
+The suite checks the data generator (schema, ranges, reproducibility, direction of known risk drivers) and the modelling pipeline (stratified split, no target leakage, unseen categories at scoring time, AUC above a floor). It runs on every push via GitHub Actions.
+
 ## Project Structure
 
 ```
@@ -72,6 +83,7 @@ credit-scoring-model/
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
+├── tests/                  # pytest suite (data + models)
 ├── data/                   # Generated dataset (CSV)
 ├── outputs/
 │   ├── figures/            # PNG charts
