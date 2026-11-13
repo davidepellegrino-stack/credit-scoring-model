@@ -8,6 +8,25 @@ A full machine learning pipeline for credit default prediction, built with sciki
 
 Built as part of a self-directed quantitative finance project alongside M2 Financial Economics studies at Université Paris 1 Panthéon-Sorbonne.
 
+## Data: Home Credit (real loans)
+
+The upgrade path for this repo is real data. `src/data_home_credit.py` downloads, caches (in the git-ignored `data/home_credit/`) and validates the application tables of the **Home Credit Default Risk** dataset (Home Credit Group, Kaggle competition, 2018). Kaggle needs credentials, so the script fetches the same tables from a public Hugging Face mirror (`mohameddhameem/home-credit-default-risk`) for convenience. Raw data is never committed.
+
+```bash
+python src/data_home_credit.py
+```
+
+Checked on the actual download:
+
+| Table | Rows | Notes |
+|---|---|---|
+| `application_train` | 307,511 | 123 columns, 24,825 defaults, **8.07% default rate** |
+| `application_test` | 48,744 | target held out by the competition |
+
+`TARGET = 1` is Home Credit's "payment difficulties" flag: a late payment of more than X days on at least one of the first Y instalments (X and Y are not disclosed). It is a default-like event within an observation window, not a Basel 90-days-past-due default. The mirror adds an `application_date` column (2018-01-01 to 2020-12-31) that is not in the Kaggle original; it is treated as a synthetic timestamp and only used for an out-of-time split. Schema checks cover required columns, unique IDs, binary target and sign conventions.
+
+The models below still run on the synthetic generator, which is kept for the unit tests; they are being moved to the real data next.
+
 ## Models
 
 | Model | CV AUC | Test AUC | Sensitivity | Specificity |
@@ -79,7 +98,8 @@ The suite checks the data generator (schema, ranges, reproducibility, direction 
 credit-scoring-model/
 ├── src/
 │   ├── config.py           # All parameters and paths
-│   ├── generate_data.py    # Synthetic dataset generator
+│   ├── generate_data.py    # Synthetic dataset generator (tests)
+│   ├── data_home_credit.py # Home Credit download, cache, validation
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
