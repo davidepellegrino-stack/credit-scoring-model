@@ -25,9 +25,27 @@ Checked on the actual download:
 
 `TARGET = 1` is Home Credit's "payment difficulties" flag: a late payment of more than X days on at least one of the first Y instalments (X and Y are not disclosed). It is a default-like event within an observation window, not a Basel 90-days-past-due default. The mirror adds an `application_date` column (2018-01-01 to 2020-12-31) that is not in the Kaggle original; it is treated as a synthetic timestamp and only used for an out-of-time split. Schema checks cover required columns, unique IDs, binary target and sign conventions.
 
-The models below still run on the synthetic generator, which is kept for the unit tests; they are being moved to the real data next.
+## Results on real loans (application table only)
 
-## Models
+```bash
+python src/run_home_credit.py
+```
+
+Stratified 80/20 split (246,008 train / 61,503 test, seed 42), 8.07% default rate. Features are built from the application form only (`src/features_home_credit.py`): age, employment length (the `365243` "not employed" sentinel becomes NaN plus a flag), credit/income, annuity/income, goods/credit, credit term, income per family member, the three `EXT_SOURCE` scores and their mean/min/product/missing count, plus seven categoricals. Missing values: median imputation with missing-indicators for Logistic Regression and Random Forest, native NaN handling for gradient boosting; imputers are fitted inside the pipeline, on training data only.
+
+| Model | Test AUC | Avg Precision | Brier |
+|---|---|---|---|
+| Logistic Regression | 0.746 | 0.233 | 0.0684 |
+| Random Forest | 0.749 | 0.237 | 0.0685 |
+| Gradient Boosting (HistGB) | **0.764** | 0.254 | 0.0673 |
+
+A single hold-out split, no tuning beyond sensible defaults, and no bureau or previous-loan tables yet (next step), so read the gaps between models as indicative. The Brier score of a constant prediction at the base rate is about 0.074, so all three models are only modestly better than that: sharper, but not yet calibrated for ECL use.
+
+## Synthetic demo (used by the unit tests)
+
+The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
+
+### Synthetic-data results
 
 | Model | CV AUC | Test AUC | Sensitivity | Specificity |
 |---|---|---|---|---|
@@ -100,6 +118,8 @@ credit-scoring-model/
 │   ├── config.py           # All parameters and paths
 │   ├── generate_data.py    # Synthetic dataset generator (tests)
 │   ├── data_home_credit.py # Home Credit download, cache, validation
+│   ├── features_home_credit.py # Application-form features
+│   ├── run_home_credit.py  # LR / RF / GBM on the real loans
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
