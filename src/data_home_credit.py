@@ -27,9 +27,15 @@ HF_BASE = f"https://huggingface.co/datasets/{HF_REPO}/resolve/main"
 CACHE_DIR = os.path.join(DATA_DIR, "home_credit")
 
 # table name -> path of the parquet file inside the mirror
+# (large tables are sharded in the mirror; a name maps to one path or a list of paths)
 TABLES = {
     "application_train": "application_train_dated/train-00000-of-00001.parquet",
     "application_test": "application_test/train-00000-of-00001.parquet",
+    "bureau": "bureau/train-00000-of-00001.parquet",
+    "previous_application": [
+        "previous_application/train-00000-of-00002.parquet",
+        "previous_application/train-00001-of-00002.parquet",
+    ],
 }
 
 ID_COL = "SK_ID_CURR"
@@ -55,15 +61,37 @@ def _download(url: str, dest: str) -> None:
     os.replace(tmp, dest)
 
 
-def fetch_table(name: str, cache_dir: str = CACHE_DIR, force: bool = False) -> str:
-    """Return the local path of a cached table, downloading it if needed."""
+def fetch_table_files(name: str, cache_dir: str = CACHE_DIR, force: bool = False) -> list:
+    """Return the local paths of a table's cached parquet shards, downloading what is missing."""
     if name not in TABLES:
         raise KeyError(f"unknown table {name!r}; choose from {sorted(TABLES)}")
-    dest = os.path.join(cache_dir, f"{name}.parquet")
-    if force or not os.path.exists(dest):
-        print(f"Downloading {name} from the Hugging Face mirror ...")
-        _download(f"{HF_BASE}/{TABLES[name]}", dest)
-    return dest
+    remote = TABLES[name] if isinstance(TABLES[name], list) else [TABLES[name]]
+    paths = []
+    for i, rel in enumerate(remote):
+        suffix = "" if len(remote) == 1 else f"_{i}"
+        dest = os.path.join(cache_dir, f"{name}{suffix}.parquet")
+        if force or not os.path.exists(dest):
+            print(f"Downloading {name}{suffix} from the Hugging Face mirror ...")
+            _download(f"{HF_BASE}/{rel}", dest)
+        paths.append(dest)
+    return paths
+
+
+def fetch_table(name: str, cache_dir: str = CACHE_DIR, force: bool = False) -> str:
+    """Return the local path of a single-file cached table, downloading it if needed."""
+    paths = fetch_table_files(name, cache_dir, force)
+    if len(paths) != 1:
+        raise ValueError(f"{name!r} has {len(paths)} shards; use fetch_table_files or load_table")
+    return paths[0]
+
+
+def load_table(name: str, columns=None, cache_dir: str = CACHE_DIR) -> pd.DataFrame:
+    """Load an auxiliary table (bureau, previous_application), concatenating shards.
+
+    `columns` restricts what is read from disk, which keeps memory small.
+    """
+    parts = [pd.read_parquet(p, columns=columns) for p in fetch_table_files(name, cache_dir)]
+    return parts[0] if len(parts) == 1 else pd.concat(parts, ignore_index=True)
 
 
 def validate_application(df: pd.DataFrame, with_target: bool = True) -> None:

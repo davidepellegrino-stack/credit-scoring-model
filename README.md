@@ -10,7 +10,7 @@ Built as part of a self-directed quantitative finance project alongside M2 Finan
 
 ## Data: Home Credit (real loans)
 
-The upgrade path for this repo is real data. `src/data_home_credit.py` downloads, caches (in the git-ignored `data/home_credit/`) and validates the application tables of the **Home Credit Default Risk** dataset (Home Credit Group, Kaggle competition, 2018). Kaggle needs credentials, so the script fetches the same tables from a public Hugging Face mirror (`mohameddhameem/home-credit-default-risk`) for convenience. Raw data is never committed.
+The upgrade path for this repo is real data. `src/data_home_credit.py` downloads, caches (in the git-ignored `data/home_credit/`) and validates the application, bureau and previous-application tables of the **Home Credit Default Risk** dataset (Home Credit Group, Kaggle competition, 2018). Kaggle needs credentials, so the script fetches the same tables from a public Hugging Face mirror (`mohameddhameem/home-credit-default-risk`) for convenience. Raw data is never committed.
 
 ```bash
 python src/data_home_credit.py
@@ -22,16 +22,20 @@ Checked on the actual download:
 |---|---|---|
 | `application_train` | 307,511 | 123 columns, 24,825 defaults, **8.07% default rate** |
 | `application_test` | 48,744 | target held out by the competition |
+| `bureau` | 1,716,428 | credits reported by other lenders, 305,811 applicants |
+| `previous_application` | 1,670,214 | earlier Home Credit applications (2 shards), 338,857 applicants |
 
 `TARGET = 1` is Home Credit's "payment difficulties" flag: a late payment of more than X days on at least one of the first Y instalments (X and Y are not disclosed). It is a default-like event within an observation window, not a Basel 90-days-past-due default. The mirror adds an `application_date` column (2018-01-01 to 2020-12-31) that is not in the Kaggle original; it is treated as a synthetic timestamp and only used for an out-of-time split. Schema checks cover required columns, unique IDs, binary target and sign conventions.
 
-## Results on real loans (application table only)
+## Results on real loans
 
 ```bash
 python src/run_home_credit.py
 ```
 
-Stratified 80/20 split (246,008 train / 61,503 test, seed 42), 8.07% default rate. Features are built from the application form only (`src/features_home_credit.py`): age, employment length (the `365243` "not employed" sentinel becomes NaN plus a flag), credit/income, annuity/income, goods/credit, credit term, income per family member, the three `EXT_SOURCE` scores and their mean/min/product/missing count, plus seven categoricals. Missing values: median imputation with missing-indicators for Logistic Regression and Random Forest, native NaN handling for gradient boosting; imputers are fitted inside the pipeline, on training data only.
+Stratified 80/20 split (246,008 train / 61,503 test, seed 42), 8.07% default rate. The baseline features come from the application form only (`src/features_home_credit.py`): age, employment length (the `365243` "not employed" sentinel becomes NaN plus a flag), credit/income, annuity/income, goods/credit, credit term, income per family member, the three `EXT_SOURCE` scores and their mean/min/product/missing count, plus seven categoricals. Missing values: median imputation with missing-indicators for Logistic Regression and Random Forest, native NaN handling for gradient boosting; imputers are fitted inside the pipeline, on training data only.
+
+Application-form features only:
 
 | Model | Test AUC | Avg Precision | Brier |
 |---|---|---|---|
@@ -39,7 +43,19 @@ Stratified 80/20 split (246,008 train / 61,503 test, seed 42), 8.07% default rat
 | Random Forest | 0.749 | 0.237 | 0.0685 |
 | Gradient Boosting (HistGB) | **0.764** | 0.254 | 0.0673 |
 
-A single hold-out split, no tuning beyond sensible defaults, and no bureau or previous-loan tables yet (next step), so read the gaps between models as indicative. The Brier score of a constant prediction at the base rate is about 0.074, so all three models are only modestly better than that: sharper, but not yet calibrated for ECL use.
+### Adding credit history: bureau and previous applications
+
+`src/features_history.py` collapses two one-to-many tables to one row per applicant: `bureau` (credits reported by other lenders: counts of active/closed/bad-debt credits, overdue days and amounts, active debt-to-limit, oldest and latest credit age) and `previous_application` (earlier Home Credit applications: approved/refused/cancelled counts, refusal share, approved amounts, credit-to-application ratio, time since last decision). Rows dated after the application are dropped. 85.7% of loans have bureau history and 94.6% have earlier applications; applicants without history get count features of 0 and a `has_*` flag, while ratios stay missing and are imputed inside the pipeline. Money amounts are `log1p`-transformed and the debt-to-limit ratio is capped at 2.
+
+Same split, same models, with and without the 29 history features (paired bootstrap over the test set, 300 resamples):
+
+| Model | AUC, application only | AUC, + history | Gain (95% CI) |
+|---|---|---|---|
+| Logistic Regression | 0.746 | 0.761 | +0.014 (0.012 to 0.017) |
+| Random Forest | 0.749 | 0.755 | +0.006 (0.005 to 0.009) |
+| Gradient Boosting (HistGB) | 0.764 | **0.773** | +0.009 (0.007 to 0.011) |
+
+The gain is real but modest (about one AUC point), and largest for the linear model, which cannot build these interactions itself. Brier scores barely move (HistGB 0.0673 to 0.0667) against 0.0742 for a constant prediction at the base rate, so the PDs are sharper but not yet calibrated for ECL use. The bootstrap interval only reflects test-set sampling, not the choice of split or hyperparameters; the installment, POS-cash and credit-card tables are not used.
 
 ## Synthetic demo (used by the unit tests)
 
@@ -119,7 +135,8 @@ credit-scoring-model/
 │   ├── generate_data.py    # Synthetic dataset generator (tests)
 │   ├── data_home_credit.py # Home Credit download, cache, validation
 │   ├── features_home_credit.py # Application-form features
-│   ├── run_home_credit.py  # LR / RF / GBM on the real loans
+│   ├── features_history.py # Bureau and previous-application aggregates
+│   ├── run_home_credit.py  # LR / RF / GBM on the real loans, with and without history
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
