@@ -57,6 +57,36 @@ Same split, same models, with and without the 29 history features (paired bootst
 
 The gain is real but modest (about one AUC point), and largest for the linear model, which cannot build these interactions itself. Brier scores barely move (HistGB 0.0673 to 0.0667) against 0.0742 for a constant prediction at the base rate, so the PDs are sharper but not yet calibrated for ECL use. The bootstrap interval only reflects test-set sampling, not the choice of split or hyperparameters; the installment, POS-cash and credit-card tables are not used.
 
+### Rank-ordering metrics: Gini, KS and decile gains
+
+`src/metrics.py` adds the measures credit-risk teams quote next to AUC: Gini = 2·AUC − 1, the KS statistic (largest gap between the score distributions of defaulters and non-defaulters, i.e. max TPR − FPR) and a gains/lift table over ten equal-size bins ranked by predicted PD. Test set, all six model/feature combinations:
+
+| Features | Model | AUC | Gini | KS |
+|---|---|---|---|---|
+| Application only | Logistic Regression | 0.746 | 0.492 | 0.367 |
+| Application only | Random Forest | 0.749 | 0.498 | 0.368 |
+| Application only | Gradient Boosting | 0.764 | 0.528 | 0.395 |
+| + Bureau & previous | Logistic Regression | 0.761 | 0.521 | 0.384 |
+| + Bureau & previous | Random Forest | 0.755 | 0.511 | 0.379 |
+| + Bureau & previous | Gradient Boosting | **0.773** | **0.546** | **0.409** |
+
+Decile table for the champion (HistGB with history); decile 1 holds the 10% of loans with the highest predicted PD, and the overall default rate is 8.07%:
+
+| Decile | Default rate | Mean PD | Lift | Cumulative share of defaults |
+|---|---|---|---|---|
+| 1 | 29.1% | 28.0% | 3.60 | 36.0% |
+| 2 | 15.1% | 14.7% | 1.86 | 54.6% |
+| 3 | 10.2% | 10.1% | 1.27 | 67.3% |
+| 4 | 7.3% | 7.5% | 0.90 | 76.4% |
+| 5 | 6.1% | 5.8% | 0.75 | 83.9% |
+| 6 | 4.3% | 4.5% | 0.54 | 89.2% |
+| 7 | 3.2% | 3.6% | 0.39 | 93.2% |
+| 8 | 2.6% | 2.8% | 0.32 | 96.4% |
+| 9 | 1.7% | 2.2% | 0.22 | 98.6% |
+| 10 | 1.2% | 1.4% | 0.15 | 100.0% |
+
+The riskiest decile defaults 3.6 times as often as average and holds 36% of all defaults; the top three deciles hold 67%. Default rates fall monotonically. Mean PD tracks the observed rate closely in every decile, with a slight overestimate in the safest deciles (e.g. 2.2% vs 1.7% in decile 9); a proper calibration analysis comes next. The table is also written to `outputs/tables/home_credit_deciles.csv`.
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.

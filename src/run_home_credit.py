@@ -34,6 +34,7 @@ from data_home_credit import ID_COL, TARGET_COL, load_application, load_table  #
 from features_history import (BUREAU_COLS, HISTORY_FEATURES, PREV_COLS,  # noqa: E402
                               add_history_features, bureau_aggregates, previous_aggregates)
 from features_home_credit import CATEGORICAL, NUMERIC, build_features  # noqa: E402
+from metrics import decile_table, gini, ks_statistic  # noqa: E402
 
 
 def _onehot():
@@ -114,6 +115,8 @@ def main():
             rows.append({
                 "Features": set_name, "Model": name,
                 "Test AUC": round(roc_auc_score(y_te, p), 4),
+                "Gini": round(gini(y_te, p), 4),
+                "KS": round(ks_statistic(y_te, p), 4),
                 "Avg Precision": round(average_precision_score(y_te, p), 4),
                 "Brier": round(brier_score_loss(y_te, p), 4),
             })
@@ -129,6 +132,11 @@ def main():
                       "95% CI low": round(lo, 4), "95% CI high": round(hi, 4)})
     gain_df = pd.DataFrame(gains)
     gain_df.to_csv(os.path.join(OUTPUT_TABLES, "home_credit_history_gain.csv"), index=False)
+    champion = preds[("+ Bureau & previous", "Gradient Boosting")]
+    deciles = decile_table(y_te, champion)
+    deciles.round(4).to_csv(os.path.join(OUTPUT_TABLES, "home_credit_deciles.csv"), index=False)
+    print("\nDecile gains/lift, HistGB with history (decile 1 = riskiest):\n"
+          + deciles.round(4).to_string(index=False))
     print("\n" + res.to_string(index=False) + "\n\n" + gain_df.to_string(index=False))
 
 
