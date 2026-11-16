@@ -85,7 +85,19 @@ Decile table for the champion (HistGB with history); decile 1 holds the 10% of l
 | 9 | 1.7% | 2.2% | 0.22 | 98.6% |
 | 10 | 1.2% | 1.4% | 0.15 | 100.0% |
 
-The riskiest decile defaults 3.6 times as often as average and holds 36% of all defaults; the top three deciles hold 67%. Default rates fall monotonically. Mean PD tracks the observed rate closely in every decile, with a slight overestimate in the safest deciles (e.g. 2.2% vs 1.7% in decile 9); a proper calibration analysis comes next. The table is also written to `outputs/tables/home_credit_deciles.csv`.
+The riskiest decile defaults 3.6 times as often as average and holds 36% of all defaults; the top three deciles hold 67%. Default rates fall monotonically. Mean PD tracks the observed rate closely in every decile, with a slight overestimate in the safest deciles (e.g. 2.2% vs 1.7% in decile 9); calibration is checked in the next section. The table is also written to `outputs/tables/home_credit_deciles.csv`.
+
+### Calibration: are the PDs real probabilities?
+
+IFRS 9 expected credit loss multiplies PD by LGD and EAD, so the PD must match observed default frequencies, not just rank loans. `src/calibration.py` and `src/run_calibration.py` test this for the champion. The champion is refit on 75% of the training loans (184,506); Platt scaling (logistic regression on logit of the score) and isotonic regression are fitted on the remaining 25% (61,502 loans); the 61,503-loan test set is only used for the comparison below.
+
+| Version | Brier | Log loss | ECE | Mean PD − default rate |
+|---|---|---|---|---|
+| Raw HistGB | 0.06680 | 0.24157 | 0.00245 | −0.00006 |
+| Platt scaling | 0.06680 | 0.24155 | 0.00221 | −0.00052 |
+| Isotonic | 0.06685 | 0.24168 | 0.00380 | −0.00054 |
+
+ECE is the loan-weighted mean gap between mean PD and observed default rate over ten equal-count bins. The result is that the raw gradient-boosting PDs are already well calibrated: the model is trained with log loss and no class weights, so its portfolio mean PD matches the default rate almost exactly and ECE is about 0.25 percentage points. Platt scaling changes nothing material and isotonic regression is slightly worse (it adds step-function noise), so I keep the raw PDs. The one visible bias is the one the decile table hinted at: the two safest bins are overestimated (bin 1: mean PD 1.36% vs 1.06% observed; bin 2: 2.12% vs 1.69%), which is small in absolute terms but matters for low-risk stage 1 ECL. `python src/run_calibration.py` (about 35 s once the data is cached) writes the reliability-curve PNG to `outputs/figures/home_credit_reliability.png` and the tables `home_credit_calibration.csv` and `home_credit_reliability.csv` to `outputs/tables/`.
 
 ## Synthetic demo (used by the unit tests)
 
@@ -167,6 +179,8 @@ credit-scoring-model/
 │   ├── features_home_credit.py # Application-form features
 │   ├── features_history.py # Bureau and previous-application aggregates
 │   ├── run_home_credit.py  # LR / RF / GBM on the real loans, with and without history
+│   ├── calibration.py      # ECE, reliability table, Platt and isotonic calibrators
+│   ├── run_calibration.py  # Calibration of the champion on a held-out split
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
