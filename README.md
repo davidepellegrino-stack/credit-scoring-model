@@ -99,6 +99,27 @@ IFRS 9 expected credit loss multiplies PD by LGD and EAD, so the PD must match o
 
 ECE is the loan-weighted mean gap between mean PD and observed default rate over ten equal-count bins. The result is that the raw gradient-boosting PDs are already well calibrated: the model is trained with log loss and no class weights, so its portfolio mean PD matches the default rate almost exactly and ECE is about 0.25 percentage points. Platt scaling changes nothing material and isotonic regression is slightly worse (it adds step-function noise), so I keep the raw PDs. The one visible bias is the one the decile table hinted at: the two safest bins are overestimated (bin 1: mean PD 1.36% vs 1.06% observed; bin 2: 2.12% vs 1.69%), which is small in absolute terms but matters for low-risk stage 1 ECL. `python src/run_calibration.py` (about 35 s once the data is cached) writes the reliability-curve PNG to `outputs/figures/home_credit_reliability.png` and the tables `home_credit_calibration.csv` and `home_credit_reliability.csv` to `outputs/tables/`.
 
+### WoE / Information Value scorecard
+
+Banks usually ship the PD model as a points scorecard, because every bin and its points can be read, challenged and audited. `src/scorecard.py` bins each variable (quantile pre-bins merged until the bad rate is monotone and every bin holds at least 5% of loans; missing values get their own bin; rare categories pool into "other"), computes the Weight of Evidence (ln of good share over bad share, smoothed by 0.5) and the Information Value, fits a logistic regression on the WoE values and rescales the log-odds to points: 600 points at 50:1 odds of good, 20 points to double the odds (PDO). Bins are fitted on the training loans only. `python src/run_scorecard.py` (about 20 s once the data is cached) keeps the 15 variables with the highest IV (all at least 0.02) and writes `home_credit_iv.csv`, `home_credit_scorecard_points.csv` and `home_credit_scorecard_metrics.csv` to `outputs/tables/`.
+
+Information value on the training loans (reading: 0.1-0.3 medium, 0.3-0.5 strong, above 0.5 very strong, often a sign of a dominant variable to check for leakage):
+
+| Variable | IV |
+|---|---|
+| ext_source_mean | 0.598 |
+| ext_source_min | 0.465 |
+| EXT_SOURCE_3 | 0.323 |
+| EXT_SOURCE_2 | 0.302 |
+| ext_source_prod | 0.252 |
+| EXT_SOURCE_1 | 0.146 |
+| employed_years | 0.112 |
+| age_years | 0.088 |
+
+The three external scores (anonymised third-party scores supplied with the data) dominate, so the high IV of their aggregates is expected rather than leakage. They are strongly correlated with each other, so their IV is not additive; the logistic regression shares the weight among them.
+
+Test-set result (61,503 loans): AUC 0.742, Gini 0.483, KS 0.358, against Gini 0.546 and KS 0.409 for the gradient-boosting champion. The scorecard gives up about 0.06 Gini for a model that can be audited line by line. Scores run from 471 to 644 (median 569); the default rate falls monotonically across score deciles, from 25.4% in the lowest-score decile to 1.4% in the highest.
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
@@ -181,6 +202,8 @@ credit-scoring-model/
 │   ├── run_home_credit.py  # LR / RF / GBM on the real loans, with and without history
 │   ├── calibration.py      # ECE, reliability table, Platt and isotonic calibrators
 │   ├── run_calibration.py  # Calibration of the champion on a held-out split
+│   ├── scorecard.py        # WoE binning, Information Value, points scorecard
+│   ├── run_scorecard.py    # Scorecard on the real loans vs the champion
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
