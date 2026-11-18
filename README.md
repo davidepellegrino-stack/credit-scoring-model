@@ -120,6 +120,17 @@ The three external scores (anonymised third-party scores supplied with the data)
 
 Test-set result (61,503 loans): AUC 0.742, Gini 0.483, KS 0.358, against Gini 0.546 and KS 0.409 for the gradient-boosting champion. The scorecard gives up about 0.06 Gini for a model that can be audited line by line. Scores run from 471 to 644 (median 569); the default rate falls monotonically across score deciles, from 25.4% in the lowest-score decile to 1.4% in the highest.
 
+### Out-of-time check
+
+A bank validates a PD model on loans originated after the ones it was fitted on. `src/run_out_of_time.py` (about 50 s once the data is cached) trains the champion (gradient boosting with bureau and previous-application history) on loans applied in 2018-2019 (205,007) and tests it on 2020 (102,504), next to the same model trained on a random sample of the same size and tested on the same 2020 loans.
+
+| Training set | AUC | Gini | KS | Brier | Mean PD | Default rate |
+|---|---|---|---|---|---|---|
+| Out-of-time (2018-2019) | 0.7757 | 0.5514 | 0.4145 | 0.0662 | 8.07% | 7.98% |
+| Random, same size | 0.7760 | 0.5519 | 0.4153 | 0.0661 | 8.07% | 7.98% |
+
+The two are indistinguishable, and AUC is stable by quarter (0.772 to 0.778). This is not evidence that the model is stable over time. The `application_date` column exists only in the Hugging Face mirror (the Kaggle original has no dates), its rank correlation with `SK_ID_CURR` is 1.00000 (dates were assigned in id order), and the default rate is flat at 7.9-8.4% in all twelve quarters. So the split is a mechanical test of the pipeline (no leakage through ids or dates, no dependence on sample size) and the numbers here cannot show drift. A real OOT test needs genuine origination dates, for example the Freddie Mac loan-level data planned for the mortgage extension.
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
@@ -204,6 +215,8 @@ credit-scoring-model/
 │   ├── run_calibration.py  # Calibration of the champion on a held-out split
 │   ├── scorecard.py        # WoE binning, Information Value, points scorecard
 │   ├── run_scorecard.py    # Scorecard on the real loans vs the champion
+│   ├── out_of_time.py      # Time split, date/id diagnostic, per-quarter table
+│   ├── run_out_of_time.py  # Train 2018-2019, test 2020
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
