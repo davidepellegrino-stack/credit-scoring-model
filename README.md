@@ -131,6 +131,10 @@ A bank validates a PD model on loans originated after the ones it was fitted on.
 
 The two are indistinguishable, and AUC is stable by quarter (0.772 to 0.778). This is not evidence that the model is stable over time. The `application_date` column exists only in the Hugging Face mirror (the Kaggle original has no dates), its rank correlation with `SK_ID_CURR` is 1.00000 (dates were assigned in id order), and the default rate is flat at 7.9-8.4% in all twelve quarters. So the split is a mechanical test of the pipeline (no leakage through ids or dates, no dependence on sample size) and the numbers here cannot show drift. A real OOT test needs genuine origination dates, for example the Freddie Mac loan-level data planned for the mortgage extension.
 
+## Macro data for IFRS 9 (work in progress)
+
+`ifrs9/fred.py` downloads ten US macro and bank-credit series from FRED (unemployment, real GDP, fed funds, 10y yield, CPI, Case-Shiller, and the all-bank delinquency / charge-off rates for credit cards, consumer loans and mortgages), caches them under `data/fred/` (git-ignored) and aligns them to calendar quarters. Monthly and daily series are averaged within the quarter and left missing if the quarter is incomplete; quarterly series are kept as published. It also builds the regressors for the satellite model (GDP growth y/y, 4-quarter change in unemployment, inflation, house-price growth, term spread). Run `python ifrs9/fred.py` for the coverage table. Card delinquency starts in 1991Q1 and charge-offs in 1985Q1; the unemployment rate for 2025Q4 is missing because October 2025 was never published. These are US bank-portfolio series, not Home Credit's own book, so the satellite model next in line is a macro-to-credit-cycle link, not a fit to the Home Credit loans (the mirror's dates carry no cycle).
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
@@ -220,6 +224,8 @@ credit-scoring-model/
 │   ├── models.py           # sklearn pipelines + evaluation
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
+├── ifrs9/
+│   └── fred.py             # FRED download, quarterly alignment, macro regressors
 ├── tests/                  # pytest suite (data + models)
 ├── data/                   # Generated dataset (CSV)
 ├── outputs/
