@@ -135,6 +135,27 @@ The two are indistinguishable, and AUC is stable by quarter (0.772 to 0.778). Th
 
 `ifrs9/fred.py` downloads ten US macro and bank-credit series from FRED (unemployment, real GDP, fed funds, 10y yield, CPI, Case-Shiller, and the all-bank delinquency / charge-off rates for credit cards, consumer loans and mortgages), caches them under `data/fred/` (git-ignored) and aligns them to calendar quarters. Monthly and daily series are averaged within the quarter and left missing if the quarter is incomplete; quarterly series are kept as published. It also builds the regressors for the satellite model (GDP growth y/y, 4-quarter change in unemployment, inflation, house-price growth, term spread). Run `python ifrs9/fred.py` for the coverage table. Card delinquency starts in 1991Q1 and charge-offs in 1985Q1; the unemployment rate for 2025Q4 is missing because October 2025 was never published. These are US bank-portfolio series, not Home Credit's own book, so the satellite model next in line is a macro-to-credit-cycle link, not a fit to the Home Credit loans (the mirror's dates carry no cycle).
 
+### Macro satellite model (`ifrs9/satellite.py`)
+
+The satellite model links the all-US-bank credit-card charge-off rate to the economy. It is an autoregressive model on the logit of the rate with two macro drivers:
+
+`logit(c_t) = a + rho * logit(c_(t-1)) + b_u * d_unrate_4q_t + b_g * gdp_growth_yoy_t + e_t`
+
+Estimated by OLS with Newey-West standard errors (4 lags, implemented in numpy and unit-tested against the textbook formulas). Quarters with a missing regressor are dropped, not interpolated. The COVID window 2020Q1-2021Q4 is excluded from the fit: stimulus and payment holidays lowered charge-offs while unemployment jumped, and including it removes the unemployment effect (full-sample b_u = 0.009, t = 0.5). That exclusion is a modelling choice; `python ifrs9/run_satellite.py` prints both fits.
+
+| 1985Q2-2026Q2, n = 156 | coefficient | Newey-West SE | t |
+|---|---|---|---|
+| constant | -0.512 | 0.092 | -5.6 |
+| lagged logit (rho) | 0.854 | 0.026 | 33.2 |
+| change in unemployment, 4 quarters (pp) | 0.047 | 0.011 | 4.3 |
+| real GDP growth y/y (pp) | -0.008 | 0.006 | -1.4 |
+
+A permanent +1 pp rise in the four-quarter unemployment change multiplies the long-run charge-off rate by about 1.38 (exp(0.047 / (1 - 0.854))). GDP growth has the expected sign but is not significant once unemployment is in the model.
+
+Out-of-sample check: expanding-window one-step-ahead forecasts from 2005Q1 (77 quarters, COVID quarters not scored). RMSE is 0.269 pp for the model against 0.344 pp for the AR(1)-only benchmark (ratio 0.78; Diebold-Mariano t = 2.2, p = 0.03), so the macro terms add real, if modest, forecasting power.
+
+Limits: residuals still show autocorrelation (Ljung-Box(4) p < 0.01, Durbin-Watson 1.84), so the standard errors rely on the HAC correction and the model is a transparent baseline, not a final forecasting tool. The series describes US bank card portfolios, not the Home Credit book. Scenario paths (B3) and the mapping to loan-level PDs (B4) come next.
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
@@ -225,7 +246,9 @@ credit-scoring-model/
 │   ├── visualizations.py   # All charts
 │   └── main.py             # End-to-end pipeline
 ├── ifrs9/
-│   └── fred.py             # FRED download, quarterly alignment, macro regressors
+│   ├── fred.py             # FRED download, quarterly alignment, macro regressors
+│   ├── satellite.py        # macro satellite model: ARX logit, Newey-West SEs, OOS check
+│   └── run_satellite.py    # fit, diagnostics and out-of-sample scores
 ├── tests/                  # pytest suite (data + models)
 ├── data/                   # Generated dataset (CSV)
 ├── outputs/
