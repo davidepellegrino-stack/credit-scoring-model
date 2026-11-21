@@ -154,7 +154,19 @@ A permanent +1 pp rise in the four-quarter unemployment change multiplies the lo
 
 Out-of-sample check: expanding-window one-step-ahead forecasts from 2005Q1 (77 quarters, COVID quarters not scored). RMSE is 0.269 pp for the model against 0.344 pp for the AR(1)-only benchmark (ratio 0.78; Diebold-Mariano t = 2.2, p = 0.03), so the macro terms add real, if modest, forecasting power.
 
-Limits: residuals still show autocorrelation (Ljung-Box(4) p < 0.01, Durbin-Watson 1.84), so the standard errors rely on the HAC correction and the model is a transparent baseline, not a final forecasting tool. The series describes US bank card portfolios, not the Home Credit book. Scenario paths (B3) and the mapping to loan-level PDs (B4) come next.
+Limits: residuals still show autocorrelation (Ljung-Box(4) p < 0.01, Durbin-Watson 1.84), so the standard errors rely on the HAC correction and the model is a transparent baseline, not a final forecasting tool. The series describes US bank card portfolios, not the Home Credit book. Scenario paths are in the next section; the mapping to loan-level PDs comes after that.
+
+### Macro scenarios (`ifrs9/scenarios.py`)
+
+Three 12-quarter paths (2026Q3 to 2029Q2) feed the satellite model: baseline, adverse and severely adverse. They are **our own transparent assumptions, not the Federal Reserve's published scenarios**: piecewise-linear knots for the unemployment change and for GDP growth y/y, shaped like a supervisory stress (GDP contraction, unemployment up for about two years, partial recovery). The four-quarter unemployment change the model needs is computed from the observed history joined to the scenario level path (the missing 2025Q4 unemployment value is interpolated for this step only).
+
+| Scenario | Unemployment peak | GDP growth y/y trough | Card charge-offs, peak | 3-year mean |
+|---|---|---|---|---|
+| Baseline | 4.3% (flat) | 2.0% | 2.65% | 2.64% |
+| Adverse | 6.8% | -1.5% | 3.80% (2028Q1) | 3.31% |
+| Severely adverse | 9.8% | -6.0% | 5.68% (2028Q2) | 4.35% |
+
+Starting point: 2.66% in 2026Q2. `python ifrs9/run_scenarios.py` prints the quarterly paths and writes the chart to `outputs/figures/`. Read the severe path with care: the model is estimated on 1985-2026 without COVID and its unemployment coefficient is modest (a 5.5 pp unemployment rise lifts charge-offs to about 5.7%, roughly twice the baseline), below the 2010Q1 peak of 6.6% in the data. It is a calibrated-to-history response, not a worst case; if a harsher path is needed, change the knots in `SCENARIOS`.
 
 ## Synthetic demo (used by the unit tests)
 
@@ -248,7 +260,9 @@ credit-scoring-model/
 ├── ifrs9/
 │   ├── fred.py             # FRED download, quarterly alignment, macro regressors
 │   ├── satellite.py        # macro satellite model: ARX logit, Newey-West SEs, OOS check
-│   └── run_satellite.py    # fit, diagnostics and out-of-sample scores
+│   ├── run_satellite.py    # fit, diagnostics and out-of-sample scores
+│   ├── scenarios.py        # baseline / adverse / severely adverse macro paths
+│   └── run_scenarios.py    # scenario charge-off paths and chart
 ├── tests/                  # pytest suite (data + models)
 ├── data/                   # Generated dataset (CSV)
 ├── outputs/
