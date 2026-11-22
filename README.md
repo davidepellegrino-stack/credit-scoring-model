@@ -180,6 +180,19 @@ The champion's loan-level PDs (61,503 test loans, mean 8.06% vs 8.07% observed) 
 
 `python ifrs9/run_pd_shift.py` refits the champion (about 40 s once the data are cached) and writes `outputs/tables/pd_by_scenario.csv`. Caveat: the multiplier comes from US bank card charge-offs, not from the Home Credit book, so it transfers the shape of the credit cycle, not Home Credit's own sensitivity.
 
+### Expected credit loss (`ifrs9/ecl.py`)
+
+ECL per loan = sum over quarters of marginal PD x LGD x EAD, discounted at the effective interest rate, with defaults in mid-quarter. Stage 1 uses the next 4 quarters, stage 2 the whole 12-quarter horizon; scenario ECLs are weighted 50% baseline / 30% adverse / 20% severely adverse. Assumptions, all mine and all changeable in `ifrs9/run_ecl.py`: EAD = `AMT_CREDIT` (no amortisation, 36.8 bn on the 61,503 test loans), LGD 65% flat (unsecured consumer credit; the data has no recoveries), discount rate 15%. The SICR rule moves a loan to stage 2 if its probability-weighted lifetime PD is at least 2x its origination PD (baseline lifetime PD) and at least 1 pp higher. No loan is stage 3: the book is treated as performing at the reporting date, and the realised default flag is not used for staging (look-ahead). There is no 30+ days-past-due backstop because the application table has no payment history.
+
+| ECL as % of EAD | 12-month | Lifetime (3 years) |
+|---|---|---|
+| Baseline | 4.59 | 10.48 |
+| Adverse | 5.14 | 12.78 |
+| Severely adverse | 5.78 | 16.15 |
+| Probability-weighted | 4.99 | 12.31 |
+
+Result: with the 2x rule every loan stays in stage 1, so the reported ECL is the weighted 12-month figure, 1,835 m or 4.99% of EAD. The macro scenarios lift the multiplier by at most about 2.2 in one quarter, which is not enough for a cumulative lifetime PD to double. Staging is sensitive to the threshold: at 1.25x, 22% of loans move to stage 2 under the weighted view (71% under adverse only, 97% under severe only); at 1.5x only the severe view triggers it (85%). Treat the 2x choice as a policy parameter, not a finding; the sensitivity table is the next step. `python ifrs9/run_ecl.py` prints all of this and writes `outputs/tables/ecl_summary.csv`.
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
