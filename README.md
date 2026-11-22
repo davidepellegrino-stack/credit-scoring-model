@@ -168,6 +168,18 @@ Three 12-quarter paths (2026Q3 to 2029Q2) feed the satellite model: baseline, ad
 
 Starting point: 2.66% in 2026Q2. `python ifrs9/run_scenarios.py` prints the quarterly paths and writes the chart to `outputs/figures/`. Read the severe path with care: the model is estimated on 1985-2026 without COVID and its unemployment coefficient is modest (a 5.5 pp unemployment rise lifts charge-offs to about 5.7%, roughly twice the baseline), below the 2010Q1 peak of 6.6% in the data. It is a calibrated-to-history response, not a worst case; if a harsher path is needed, change the knots in `SCENARIOS`.
 
+### Scenario PDs (`ifrs9/pd_shift.py`)
+
+The champion's loan-level PDs (61,503 test loans, mean 8.06% vs 8.07% observed) are treated as through-the-cycle 12-month PDs that hold under the baseline. For each future quarter the portfolio mean PD is scaled by the satellite multiplier (scenario charge-off rate / baseline charge-off rate), implemented as one common shift of every loan's logit PD found by bisection. This keeps PDs inside (0, 1) and the loan ranking unchanged. Quarterly PDs are read as annual rates and converted to hazards, `1 - (1 - PD)^(1/4)`; cumulative PD is `1 - prod(1 - hazard)`. Lifetime PD uses the 12-quarter horizon as an assumed remaining life, with no prepayment or amortisation, so it is an upper bound for shorter loans.
+
+| Scenario | Peak multiplier | Mean 12-month PD | Mean 3-year PD |
+|---|---|---|---|
+| Baseline | 1.00 | 8.06% | 20.56% |
+| Adverse | 1.42 (q8) | 9.04% | 25.06% |
+| Severely adverse | 2.15 (q8) | 10.19% | 31.67% |
+
+`python ifrs9/run_pd_shift.py` refits the champion (about 40 s once the data are cached) and writes `outputs/tables/pd_by_scenario.csv`. Caveat: the multiplier comes from US bank card charge-offs, not from the Home Credit book, so it transfers the shape of the credit cycle, not Home Credit's own sensitivity.
+
 ## Synthetic demo (used by the unit tests)
 
 The original pipeline below (`python src/main.py`) runs on the synthetic generator; its numbers are not real-world performance.
