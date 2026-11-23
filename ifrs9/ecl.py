@@ -54,11 +54,13 @@ def check_weights(weights):
 
 
 def weighted_ecl(term_structure, weights, lgd, ead, eir, baseline="baseline", ratio=2.0, abs_floor=0.01,
-                 impaired=None):
+                 impaired=None, pd_life_orig=None):
     """Per-loan reported ECL, stage and per-scenario ECL.
 
     Returns a dict with 'stage', 'ecl' (probability-weighted, stage-appropriate horizon),
     'ecl12' and 'ecl_life' (weighted over scenarios), and 'by_scenario' {name: (ecl12, ecl_life)}.
+    `pd_life_orig` fixes the origination lifetime PD for the SICR test (default: the baseline scenario's
+    lifetime PD); a sensitivity run that moves the baseline itself must keep the original one.
     """
     check_weights(weights)
     n_q = next(iter(term_structure.values()))["hazards"].shape[1]
@@ -71,7 +73,8 @@ def weighted_ecl(term_structure, weights, lgd, ead, eir, baseline="baseline", ra
         by[name] = (a, b)
         e12, elife = e12 + w * a, elife + w * b
         pd_w = pd_w + w * term_structure[name]["pd_life"]
-    stage = assign_stage(pd_w, term_structure[baseline]["pd_life"], ratio, abs_floor, impaired)
+    orig = term_structure[baseline]["pd_life"] if pd_life_orig is None else pd_life_orig
+    stage = assign_stage(pd_w, orig, ratio, abs_floor, impaired)
     ecl = np.where(stage == 1, e12, elife)
     if impaired is not None:
         ecl = np.where(stage == 3, np.asarray(lgd) * np.asarray(ead), ecl)
