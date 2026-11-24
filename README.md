@@ -1,10 +1,10 @@
-# Credit Scoring Model
+# Credit risk: PD model and IFRS 9 ECL
 
 [![tests](https://github.com/davidepellegrino-stack/credit-scoring-model/actions/workflows/tests.yml/badge.svg)](https://github.com/davidepellegrino-stack/credit-scoring-model/actions/workflows/tests.yml)
 
 ![Credit scoring PD model: ROC curve, best AUC 0.69 for logistic regression](assets/cover.jpg)
 
-A full machine learning pipeline for credit default prediction, built with scikit-learn. Trains and compares three models — Logistic Regression, Random Forest, and Gradient Boosting — with cross-validation, ROC-AUC evaluation, feature importance analysis, and publication-quality visualizations.
+Two connected pieces, both run on real data. Part 1 builds a probability-of-default (PD) model on the 307,511 Home Credit loans (logistic regression, random forest, gradient boosting, plus a WoE points scorecard), with discrimination, calibration and out-of-time checks. Part 2 (`ifrs9/`) links US credit-card charge-offs to macro variables from FRED, runs three macro scenarios, shifts the loan-level PDs accordingly and computes IFRS 9 expected credit loss (ECL) with staging and a sensitivity table. A synthetic generator is kept only for the unit tests.
 
 Built as part of a self-directed quantitative finance project alongside M2 Financial Economics studies at Université Paris 1 Panthéon-Sorbonne.
 
@@ -131,9 +131,24 @@ A bank validates a PD model on loans originated after the ones it was fitted on.
 
 The two are indistinguishable, and AUC is stable by quarter (0.772 to 0.778). This is not evidence that the model is stable over time. The `application_date` column exists only in the Hugging Face mirror (the Kaggle original has no dates), its rank correlation with `SK_ID_CURR` is 1.00000 (dates were assigned in id order), and the default rate is flat at 7.9-8.4% in all twelve quarters. So the split is a mechanical test of the pipeline (no leakage through ids or dates, no dependence on sample size) and the numbers here cannot show drift. A real OOT test needs genuine origination dates, for example the Freddie Mac loan-level data planned for the mortgage extension.
 
-## Macro data for IFRS 9 (work in progress)
+## IFRS 9 expected credit loss under macro scenarios
 
-`ifrs9/fred.py` downloads ten US macro and bank-credit series from FRED (unemployment, real GDP, fed funds, 10y yield, CPI, Case-Shiller, and the all-bank delinquency / charge-off rates for credit cards, consumer loans and mortgages), caches them under `data/fred/` (git-ignored) and aligns them to calendar quarters. Monthly and daily series are averaged within the quarter and left missing if the quarter is incomplete; quarterly series are kept as published. It also builds the regressors for the satellite model (GDP growth y/y, 4-quarter change in unemployment, inflation, house-price growth, term spread). Run `python ifrs9/fred.py` for the coverage table. Card delinquency starts in 1991Q1 and charge-offs in 1985Q1; the unemployment rate for 2025Q4 is missing because October 2025 was never published. These are US bank-portfolio series, not Home Credit's own book, so the satellite model next in line is a macro-to-credit-cycle link, not a fit to the Home Credit loans (the mirror's dates carry no cycle).
+Pipeline, one script per step (each prints its tables; `ifrs9/` scripts download and cache FRED data themselves):
+
+| Step | Module | What it does |
+|---|---|---|
+| 1 | `ifrs9/fred.py` | FRED series aligned to quarters, macro regressors |
+| 2 | `ifrs9/satellite.py` | logit AR(1) model of card charge-offs on unemployment change and GDP growth |
+| 3 | `ifrs9/scenarios.py` | baseline / adverse / severely adverse paths over 12 quarters (my own assumptions) |
+| 4 | `ifrs9/pd_shift.py` | logit shift of the champion's PDs to the scenario charge-off multiplier |
+| 5 | `ifrs9/ecl.py` | SICR staging, discounted PD x LGD x EAD, 50/30/20 scenario weights |
+| 6 | `ifrs9/sensitivity.py` | one-at-a-time changes of the main assumptions |
+
+Headline: probability-weighted ECL is 4.99% of EAD (1,835 m on 36.8 bn); +2 pp unemployment adds 11.4%, LGD +/-10 pp adds/removes 15.4%. LGD (65%), EAD (flat `AMT_CREDIT`) and the 3-year horizon are assumptions because the data has no recoveries or payment history, and the macro link comes from US bank card charge-offs, not from the Home Credit book. Details and caveats are in the subsections below.
+
+### Macro data (`ifrs9/fred.py`)
+
+`ifrs9/fred.py` downloads ten US macro and bank-credit series from FRED (unemployment, real GDP, fed funds, 10y yield, CPI, Case-Shiller, and the all-bank delinquency / charge-off rates for credit cards, consumer loans and mortgages), caches them under `data/fred/` (git-ignored) and aligns them to calendar quarters. Monthly and daily series are averaged within the quarter and left missing if the quarter is incomplete; quarterly series are kept as published. It also builds the regressors for the satellite model (GDP growth y/y, 4-quarter change in unemployment, inflation, house-price growth, term spread). Run `python ifrs9/fred.py` for the coverage table. Card delinquency starts in 1991Q1 and charge-offs in 1985Q1; the unemployment rate for 2025Q4 is missing because October 2025 was never published. These are US bank-portfolio series, not Home Credit's own book, so the satellite model is a macro-to-credit-cycle link, not a fit to the Home Credit loans (the mirror's dates carry no cycle).
 
 ### Macro satellite model (`ifrs9/satellite.py`)
 
@@ -307,6 +322,10 @@ credit-scoring-model/
 │   ├── run_satellite.py    # fit, diagnostics and out-of-sample scores
 │   ├── scenarios.py        # baseline / adverse / severely adverse macro paths
 │   ├── run_scenarios.py    # scenario charge-off paths and chart
+│   ├── pd_shift.py         # logit shift of loan PDs to a scenario multiplier
+│   ├── run_pd_shift.py     # 12-month and 3-year PD by scenario
+│   ├── ecl.py              # SICR staging, discounted ECL, scenario weighting
+│   ├── run_ecl.py          # ECL table by scenario and stage
 │   ├── sensitivity.py      # ECL sensitivity: unemployment shift, SICR, LGD, discount rate, weights
 │   └── run_sensitivity.py  # sensitivity table
 ├── tests/                  # pytest suite (data + models)
