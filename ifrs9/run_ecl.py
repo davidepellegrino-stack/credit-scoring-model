@@ -2,7 +2,7 @@
 
 Assumptions (all stated, all changeable below): EAD = AMT_CREDIT (no amortisation), LGD 65% for unsecured
 consumer credit, discounting at 15% a year, scenario weights 50 / 30 / 20, SICR = lifetime PD at least
-2x origination and +1 pp. Prints the ECL table by stage and scenario and writes outputs/tables/ecl_summary.csv.
+2x origination and +1 pp. Prints the ECL table by stage and scenario and writes outputs/tables/ecl_summary.csv and ecl_by_scenario.csv.
 """
 import os
 import sys
@@ -48,7 +48,9 @@ if __name__ == "__main__":
             for n, (e12, el) in r["by_scenario"].items()}
     rows["weighted"] = {"12m": 100 * r["ecl12"].sum() / total_ead, "lifetime": 100 * r["ecl_life"].sum() / total_ead}
     print("\nECL as % of EAD if every loan were measured on one horizon:")
-    print(pd.DataFrame(rows).T.round(2).to_string())
+    by_scenario = pd.DataFrame(rows).T.rename_axis("scenario")
+    print(by_scenario.round(2).to_string())
+    by_scenario.round(4).to_csv(os.path.join(OUTPUT_TABLES, "ecl_by_scenario.csv"))
     print(f"\nReported (stage-appropriate, weighted) ECL: {r['ecl'].sum() / 1e6:,.0f} m = "
           f"{100 * r['ecl'].sum() / total_ead:.2f}% of EAD")
     orig = ts["baseline"]["pd_life"]

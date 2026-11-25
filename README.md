@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/davidepellegrino-stack/credit-scoring-model/actions/workflows/tests.yml/badge.svg)](https://github.com/davidepellegrino-stack/credit-scoring-model/actions/workflows/tests.yml)
 
-![Credit scoring PD model: ROC curve, best AUC 0.69 for logistic regression](assets/cover.jpg)
+![IFRS 9 ECL as % of EAD by scenario, 12-month / 3-year: baseline 4.59 / 10.48, adverse 5.14 / 12.78, severely adverse 5.78 / 16.15, weighted 4.99 / 12.31](assets/ecl_by_scenario.svg)
 
 Two connected pieces, both run on real data. Part 1 builds a probability-of-default (PD) model on the 307,511 Home Credit loans (logistic regression, random forest, gradient boosting, plus a WoE points scorecard), with discrimination, calibration and out-of-time checks. Part 2 (`ifrs9/`) links US credit-card charge-offs to macro variables from FRED, runs three macro scenarios, shifts the loan-level PDs accordingly and computes IFRS 9 expected credit loss (ECL) with staging and a sensitivity table. A synthetic generator is kept only for the unit tests.
 
@@ -206,7 +206,7 @@ ECL per loan = sum over quarters of marginal PD x LGD x EAD, discounted at the e
 | Severely adverse | 5.78 | 16.15 |
 | Probability-weighted | 4.99 | 12.31 |
 
-Result: with the 2x rule every loan stays in stage 1, so the reported ECL is the weighted 12-month figure, 1,835 m or 4.99% of EAD. The macro scenarios lift the multiplier by at most about 2.2 in one quarter, which is not enough for a cumulative lifetime PD to double. Staging is sensitive to the threshold: at 1.25x, 22% of loans move to stage 2 under the weighted view (71% under adverse only, 97% under severe only); at 1.5x only the severe view triggers it (85%). Treat the 2x choice as a policy parameter, not a finding; the sensitivity table below puts a number on it. `python ifrs9/run_ecl.py` prints all of this and writes `outputs/tables/ecl_summary.csv`.
+Result: with the 2x rule every loan stays in stage 1, so the reported ECL is the weighted 12-month figure, 1,835 m or 4.99% of EAD. The macro scenarios lift the multiplier by at most about 2.2 in one quarter, which is not enough for a cumulative lifetime PD to double. Staging is sensitive to the threshold: at 1.25x, 22% of loans move to stage 2 under the weighted view (71% under adverse only, 97% under severe only); at 1.5x only the severe view triggers it (85%). Treat the 2x choice as a policy parameter, not a finding; the sensitivity table below puts a number on it. `python ifrs9/run_ecl.py` prints all of this and writes `outputs/tables/ecl_summary.csv` and `ecl_by_scenario.csv`; `python ifrs9/plot_ecl.py` turns the latter into the figure at the top of this README.
 
 ### ECL sensitivity (`ifrs9/sensitivity.py`)
 
@@ -326,6 +326,7 @@ credit-scoring-model/
 │   ├── run_pd_shift.py     # 12-month and 3-year PD by scenario
 │   ├── ecl.py              # SICR staging, discounted ECL, scenario weighting
 │   ├── run_ecl.py          # ECL table by scenario and stage
+│   ├── plot_ecl.py         # README figure: ECL by scenario (SVG)
 │   ├── sensitivity.py      # ECL sensitivity: unemployment shift, SICR, LGD, discount rate, weights
 │   └── run_sensitivity.py  # sensitivity table
 ├── tests/                  # pytest suite (data + models)
